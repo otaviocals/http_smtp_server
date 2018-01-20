@@ -1,6 +1,7 @@
 const http = require("http");
 const express = require("express");
 const ses = require("node-ses");
+const xml2js = require("xml2js");
 
 const config = require("../config/config");
 
@@ -12,6 +13,12 @@ var mailClient = ses.createClient(
 				key: config.credential.key,
 				secret: config.credential.secret
 			});
+var parser = new xml2js.Parser();
+
+parser.on("error", (err) => 
+	{
+		console.log("Parser eror ", err);
+	});
 
 app.get("/", (req,res) =>
 	{
@@ -20,13 +27,15 @@ app.get("/", (req,res) =>
 
 		var to = req.query.to;
 		var message = req.query.message;
+		var from = req.query.from || config.email.from;
+		var subject = req.query.subject || config.email.subject;
 
 	//Send Email
 		mailClient.sendEmail(
 			{
 				to,
-				from: config.email.from,
-				subject: config.email.subject,
+				from,
+				subject,
 				message
 			}, (err, data, res) => 
 			{
@@ -37,7 +46,20 @@ app.get("/", (req,res) =>
 					}
 				else
 					{
-						console.log("Message sent to " + to);
+						parser.parseString(data.toString(), (err,res) => 
+						{
+							var RequestId = res.SendEmailResponse.ResponseMetadata[0].RequestId[0];
+							var emailSent = 
+								{
+									RequestId,
+									to,
+									from,
+									subject,
+									message
+								};
+							console.log("Message sent:");
+							console.log(emailSent);
+						});
 					}
 			});
 
